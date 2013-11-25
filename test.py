@@ -1,11 +1,12 @@
 #!/usr/bin/env python
 
-import sys, os.path
+import sys, os.path, json, time, random
 import gi
 gi.require_version("WebKit", "3.0")
-from gi.repository import WebKit
-from gi.repository import Gtk
+from gi.repository import WebKit, Gtk, GObject
 from jinja2 import Environment, PackageLoader
+
+from sh import fortune
 
 
 class MainBrace(Gtk.Window):
@@ -17,8 +18,11 @@ class MainBrace(Gtk.Window):
         self.add(self.webview)
         self.show_all()
         self.__setup_templates()
-        self.load_template("base.html")
-
+        self.load_template("base.html", context={
+            'fortunes' : [fortune().strip() for i in range(20)]
+        })
+        GObject.timeout_add(100, self.test_callback)
+        
     def __setup_templates(self):
         """Setup Jinja2 machinery."""
 
@@ -35,6 +39,22 @@ class MainBrace(Gtk.Window):
         template = self.env.get_template(name)
         rendered = template.render(**context)
         self.webview.load_html_string(rendered, self.__uri_base)
+
+    def __call(self, function_name, *args):
+        arg_str = json.dumps(args)[1:-1]
+        eval_str = "{0}({1})".format(function_name, arg_str)
+        self.webview.execute_script(eval_str)
+        
+
+    def post_message(self, panel, sender, msg):
+        self.__call("post_message", panel, sender, time.time(), msg)
+
+
+    def test_callback(self, *args, **kargs):
+        panel = ["lhs", "rhs"][random.randint(0,1)]
+        self.post_message(panel, "nobody", fortune().strip())
+        GObject.timeout_add(random.randint(200, 1000), self.test_callback)        
+        
         
 
 if __name__ == "__main__":
